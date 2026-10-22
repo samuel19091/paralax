@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+	<title>PRISMA — Destapa el espectro · Realidad Aumentada</title>
+	<meta charset="utf-8">
+	<meta name="generator" content="Three.js Editor">
+	<meta name="description"
+		content="PRISMA, té verde con gas inspirado en la descomposición de la luz. Experiencia de realidad aumentada con tres pistas de sonido.">
+	<meta name="theme-color" content="#0A0A12">
+	<meta name="viewport"
+		content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+	<link rel="stylesheet" href="css/app.css">
+
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link
+		href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap"
+		rel="stylesheet">
+
+	<script type="importmap">
+	{
+		"imports": {
+			"three": "./js/three.compat.js",
+			"three/addons/": "./js/addons/",
+			"mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+		}
+	}
+	</script>
+
+	<script type="module">
+		import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/loaders/GLTFLoader.js';
+		window.ThreeGLTFLoader = GLTFLoader;
+	</script>
+
+	<style>
+		/* ============================================================
+		   PRISMA · sistema visual
+		   ============================================================ */
+		:root {
+			--noche: #0A0A12;
+			--grafito: #15152A;
+			--borde: #26263C;
+			--luz: #F5F5F7;
+			--humo: #8A8AA0;
+			--tenue: #4E4E64;
+			--magenta: #FF2E7E;
+			--cian: #00E5FF;
+			--lima: #D6FF3F;
+			--display: 'Space Grotesk', system-ui, sans-serif;
+			--texto: 'Inter', system-ui, sans-serif;
+		}
+
+		* { box-sizing: border-box; }
+
+		html, body {
+			margin: 0;
+			padding: 0;
+			height: 100%;
+			background: var(--noche);
+			color: var(--luz);
+			font-family: var(--texto);
+			-webkit-font-smoothing: antialiased;
+			overscroll-behavior: none;
+		}
+
+		#ar-container { position: fixed; inset: 0; }
+
+		#ar-container canvas,
+		#ar-container video { display: block; }
+
+		.log {
+			position: fixed;
+			left: 12px;
+			bottom: 12px;
+			z-index: 40;
+			font-size: 11px;
+			color: var(--tenue);
+			pointer-events: none;
+		}
+
+		body:not(.debug) .log { display: none; }
+
+		/* ------------------------------------------------ portada */
+		#overlay {
+			position: fixed;
+			inset: 0;
+			z-index: 30;
+			display: flex;
+			flex-direction: column;
+			align-items: flex-start;
+			justify-content: center;
+			padding: 32px 26px calc(26px + env(safe-area-inset-bottom));
+			background: radial-gradient(120% 90% at 85% 15%, #16162c 0%, var(--noche) 58%);
+			transition: opacity .45s ease, visibility .45s ease;
+		}
+
+		#overlay.hidden {
+			opacity: 0;
+			visibility: hidden;
+			pointer-events: none;
+		}
+
+		/* el haz entra, el espectro sale por el borde de la pantalla */
+		.prisma-deco {
+			position: absolute;
+			top: 7%;
+			right: -14%;
+			width: 118%;
+			max-width: 620px;
+			pointer-events: none;
+		}
+
+		.eyebrow {
+			margin: 0 0 14px;
+			font-size: 11px;
+			font-weight: 600;
+			letter-spacing: .26em;
+			text-transform: uppercase;
+			color: var(--humo);
+		}
+
+		.wordmark {
+			margin: 0;
+			font-family: var(--display);
+			font-weight: 700;
+			font-size: clamp(54px, 19vw, 104px);
+			line-height: .92;
+			letter-spacing: .06em;
+		}
+
+		.tagline {
+			margin: 14px 0 0;
+			font-size: 13px;
+			letter-spacing: .04em;
+			color: var(--humo);
+		}
+
+		.desc {
+			margin: 26px 0 0;
+			max-width: 30ch;
+			font-size: 15px;
+			line-height: 1.6;
+			color: #C2C2D2;
+		}
+
+		.actions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 10px;
+			margin-top: 30px;
+		}
+
+		button {
+			font-family: var(--texto);
+			cursor: pointer;
+			-webkit-tap-highlight-color: transparent;
+		}
+
+		#start-button {
+			padding: 15px 30px;
+			border: 0;
+			border-radius: 999px;
+			background: var(--luz);
+			color: var(--noche);
+			font-size: 14px;
+			font-weight: 600;
+			letter-spacing: .1em;
+			text-transform: uppercase;
+			transition: transform .18s ease, opacity .18s ease;
+		}
+
+		#start-button:active { transform: scale(.97); }
+		#start-button:disabled { opacity: .45; }
+
+		#progress-container {
+			display: none;
+			flex-direction: column;
+			gap: 9px;
+			width: min(300px, 100%);
+			margin-top: 24px;
+		}
+
+		#progress-bar-track {
+			height: 2px;
+			background: var(--borde);
+			overflow: hidden;
+		}
+
+		#progress-bar-fill {
+			height: 100%;
+			width: 0%;
+			background: linear-gradient(90deg, var(--magenta), var(--cian) 50%, var(--lima));
+			transition: width .3s ease;
+		}
+
+		#progress-label {
+			font-size: 11px;
+			letter-spacing: .12em;
+			text-transform: uppercase;
+			color: var(--humo);
+		}
+
+		.target-link {
+			margin-top: 26px;
+			font-size: 12px;
+			color: var(--humo);
+			text-decoration: none;
+			border-bottom: 1px solid var(--borde);
+			padding-bottom: 3px;
+		}
+
+		.credits {
+			position: absolute;
+			left: 26px;
+			bottom: calc(22px + env(safe-area-inset-bottom));
+			margin: 0;
+			font-size: 11px;
+			letter-spacing: .05em;
+			color: var(--tenue);
+		}
+
+		/* ------------------------------------------------ interfaz AR */
+		#ar-ui {
+			position: fixed;
+			inset: 0;
+			z-index: 20;
+			pointer-events: none;
+			opacity: 0;
+			transition: opacity .4s ease;
+		}
+
+		#ar-ui.visible { opacity: 1; }
+
+		#scan-hint {
+			position: absolute;
+			left: 50%;
+			top: 50%;
+			transform: translate(-50%, -50%);
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 20px;
+			transition: opacity .35s ease;
+		}
+
+		#ar-ui.tracking #scan-hint {
+			opacity: 0;
+			pointer-events: none;
+		}
+
+		.reticle {
+			position: relative;
+			width: 180px;
+			height: 240px;
+		}
+
+		.reticle span {
+			position: absolute;
+			width: 26px;
+			height: 26px;
+			border: 2px solid var(--cian);
+		}
+
+		.reticle span:nth-child(1) { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+		.reticle span:nth-child(2) { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+		.reticle span:nth-child(3) { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+		.reticle span:nth-child(4) { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+
+		#scan-hint p {
+			margin: 0;
+			font-size: 12px;
+			letter-spacing: .18em;
+			text-transform: uppercase;
+			text-shadow: 0 1px 10px rgba(0, 0, 0, .8);
+		}
+
+		#sound-bar {
+			position: absolute;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+			background: linear-gradient(180deg, rgba(10, 10, 18, 0) 0%, rgba(10, 10, 18, .92) 42%);
+			transform: translateY(115%);
+			transition: transform .45s cubic-bezier(.2, .8, .2, 1);
+			pointer-events: auto;
+		}
+
+		#ar-ui.tracking #sound-bar { transform: translateY(0); }
+
+		/* ficha del sabor */
+		#info-panel {
+			--c: var(--cian);
+			max-height: 0;
+			opacity: 0;
+			overflow: hidden;
+			margin-bottom: 0;
+			border-radius: 16px;
+			background: rgba(16, 16, 32, .94);
+			border: 1px solid var(--borde);
+			transition: max-height .4s cubic-bezier(.2, .8, .2, 1), opacity .3s ease,
+				margin-bottom .4s ease, padding .4s ease;
+			padding: 0 18px;
+		}
+
+		#info-panel.abierto {
+			max-height: 340px;
+			opacity: 1;
+			margin-bottom: 14px;
+			padding: 16px 18px 18px;
+			border-color: var(--c);
+		}
+
+		.info-kicker {
+			margin: 0 0 2px;
+			font-size: 10px;
+			font-weight: 600;
+			letter-spacing: .26em;
+			text-transform: uppercase;
+			color: var(--humo);
+		}
+
+		#info-nombre {
+			margin: 0;
+			font-family: var(--display);
+			font-size: 26px;
+			font-weight: 700;
+			letter-spacing: .12em;
+			line-height: 1.1;
+			color: var(--c);
+		}
+
+		#info-sabor {
+			margin: 3px 0 0;
+			font-size: 13px;
+			color: var(--luz);
+		}
+
+		#info-notas {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 6px;
+			margin-top: 11px;
+		}
+
+		#info-notas span {
+			padding: 4px 10px;
+			border: 1px solid var(--borde);
+			border-radius: 999px;
+			font-size: 10.5px;
+			letter-spacing: .09em;
+			text-transform: uppercase;
+			color: var(--humo);
+		}
+
+		#info-texto {
+			margin: 12px 0 0;
+			font-size: 13px;
+			line-height: 1.55;
+			color: #C2C2D2;
+		}
+
+		#info-datos {
+			margin: 12px 0 0;
+			padding-top: 11px;
+			border-top: 1px solid var(--borde);
+			font-size: 11px;
+			letter-spacing: .05em;
+			color: var(--humo);
+		}
+
+		#viz {
+			display: flex;
+			align-items: flex-end;
+			justify-content: center;
+			gap: 3px;
+			height: 26px;
+			margin-bottom: 14px;
+		}
+
+		#viz i {
+			display: block;
+			width: 3px;
+			height: 2px;
+			border-radius: 2px;
+			background: var(--borde);
+			transition: background .3s ease;
+		}
+
+		.tracks {
+			display: grid;
+			grid-template-columns: repeat(3, 1fr);
+			gap: 8px;
+		}
+
+		.track {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 6px;
+			padding: 13px 6px;
+			border: 1px solid var(--borde);
+			border-radius: 14px;
+			background: rgba(21, 21, 42, .72);
+			color: var(--luz);
+			transition: border-color .25s ease, background .25s ease, opacity .25s ease;
+		}
+
+		.track:disabled { opacity: .35; }
+
+		.track .dot {
+			width: 9px;
+			height: 9px;
+			border-radius: 50%;
+			background: var(--c);
+			box-shadow: 0 0 0 0 var(--c);
+			transition: box-shadow .25s ease;
+		}
+
+		.track .nombre {
+			font-family: var(--display);
+			font-size: 12px;
+			font-weight: 700;
+			letter-spacing: .14em;
+		}
+
+		.track .nota {
+			font-size: 9.5px;
+			color: var(--humo);
+			text-align: center;
+		}
+
+		.track.activa {
+			border-color: var(--c);
+			background: rgba(21, 21, 42, .95);
+		}
+
+		.track.activa .dot { box-shadow: 0 0 14px 2px var(--c); }
+		.track.activa .nombre { color: var(--c); }
+
+		#stop-button {
+			display: block;
+			width: 100%;
+			margin-top: 10px;
+			padding: 10px;
+			border: 0;
+			border-radius: 10px;
+			background: transparent;
+			color: var(--tenue);
+			font-size: 11px;
+			letter-spacing: .16em;
+			text-transform: uppercase;
+		}
+
+		@media (min-height: 760px) {
+			.desc { font-size: 16px; }
+			#sound-bar { padding-bottom: calc(26px + env(safe-area-inset-bottom)); }
+		}
+	</style>
+</head>
+
+<body ontouchstart="">
+
+	<div id="ar-container"></div>
+
+	<div class="log" id="log">—</div>
+
+	<!-- ====================================================== PORTADA -->
+	<div id="overlay">
+
+		<svg class="prisma-deco" viewBox="0 0 620 420" fill="none" aria-hidden="true">
+			<line x1="0" y1="210" x2="214" y2="210" stroke="#F5F5F7" stroke-width="2.5" />
+			<path d="M300 92 L372 302 L228 302 Z" stroke="#F5F5F7" stroke-width="2.5" />
+			<line x1="353" y1="248" x2="620" y2="168" stroke="#FF2E7E" stroke-width="2.5" />
+			<line x1="353" y1="248" x2="620" y2="248" stroke="#00E5FF" stroke-width="2.5" />
+			<line x1="353" y1="248" x2="620" y2="328" stroke="#D6FF3F" stroke-width="2.5" />
+		</svg>
+
+		<p class="eyebrow">Destapa el espectro</p>
+		<h1 class="wordmark">PRISMA</h1>
+		<p class="tagline">Té verde con gas · Botánicos · 330 ml</p>
+		<p class="desc">
+			Escanea la tarjeta y mira cómo la luz se descompone: la lata aparece en 3D
+			con tres pistas de sonido, una por cada color del espectro.
+		</p>
+
+		<div class="actions">
+			<button id="start-button">Iniciar experiencia</button>
+		</div>
+
+		<div id="progress-container">
+			<div id="progress-bar-track">
+				<div id="progress-bar-fill"></div>
+			</div>
+			<div id="progress-label">Cargando… 0%</div>
+		</div>
+
+		<a class="target-link" href="assets/marker/prisma-target.png" target="_blank" rel="noopener">¿No tienes la
+			tarjeta? Ábrela aquí</a>
+
+		<p class="credits">Realidades Expandidas · Samuel</p>
+	</div>
+
+	<!-- ====================================================== INTERFAZ AR -->
+	<div id="ar-ui">
+
+		<div id="scan-hint">
+			<div class="reticle"><span></span><span></span><span></span><span></span></div>
+			<p>Apunta la cámara a la tarjeta PRISMA</p>
+		</div>
+
+		<div id="sound-bar">
+
+			<div id="info-panel" aria-live="polite">
+				<p class="info-kicker">Prisma</p>
+				<h2 id="info-nombre">MAGENTA</h2>
+				<p id="info-sabor">hibisco + frambuesa</p>
+				<div id="info-notas"></div>
+				<p id="info-texto"></p>
+				<p id="info-datos"></p>
+			</div>
+
+			<div id="viz" aria-hidden="true"></div>
+			<div class="tracks" id="tracks"></div>
+			<button id="stop-button">Toca un color para conocer el sabor</button>
+		</div>
+
+	</div>
+
+	<script type="module">
+
+		import * as THREE from './js/three.module.js';
+		import { APP } from './js/app.js';
+		import { MindARController } from './js/mindar/mindar_controller.js';
+
+		window.THREE = THREE; // Used by APP Scripts.
+
+		/* ==========================================================
+		   CONFIGURACIÓN · las tres pistas
+		   El `id` y la `url` tienen que coincidir con los del script
+		   correspondiente en app.json ("sonido magenta", etc.).
+		   Si cambias un sonido, cámbialo en los dos archivos.
+		   ========================================================== */
+		const PISTAS = [
+			{
+				id: 'magenta', nombre: 'MAGENTA', nota: 'hibisco + frambuesa', color: '#FF2E7E',
+				url: 'https://paralax-mu.vercel.app/assets/sonido%20burbuja%202.mp3', loop: false,
+				notas: ['floral', 'ácido', 'seco'],
+				texto: 'Ácido y floral. El hibisco abre seco y la frambuesa cierra redonda, sin dulzor pegado. El más vivo de los tres.',
+				datos: '330 ml · 25 kcal · 40 mg de cafeína del té'
+			},
+			{
+				id: 'cian', nombre: 'CIAN', nota: 'menta + limón', color: '#00E5FF',
+				url: 'https://paralax-mu.vercel.app/assets/sonido%20burbuja%203.mp3', loop: false,
+				notas: ['fresco', 'cítrico', 'ligero'],
+				texto: 'Frío y limpio. La menta deja la boca abierta y el limón corta la burbuja. El más fácil de beber a media tarde.',
+				datos: '330 ml · 25 kcal · 40 mg de cafeína del té'
+			},
+			{
+				id: 'lima', nombre: 'LIMA', nota: 'maracuyá + jengibre', color: '#D6FF3F',
+				url: 'https://paralax-mu.vercel.app/assets/sonido%20burbuja%201.mp3', loop: false,
+				notas: ['tropical', 'picante', 'intenso'],
+				texto: 'Tropical con filo. El maracuyá entra dulce y el jengibre lo levanta al final. El más intenso.',
+				datos: '330 ml · 25 kcal · 40 mg de cafeína del té'
+			}
+		];
+
+		// Movimiento de la lata 3D
+		const GIRO = 0.0045;   // velocidad de giro continuo, en radianes por cuadro
+		const REBOTE = 0.13;   // intensidad del golpe de escala al cambiar de sabor
+		/* ========================================================== */
+
+		const log = document.getElementById('log');
+		const overlay = document.getElementById('overlay');
+		const startButton = document.getElementById('start-button');
+		const arContainer = document.getElementById('ar-container');
+		const arUI = document.getElementById('ar-ui');
+		const tracksBox = document.getElementById('tracks');
+		const stopButton = document.getElementById('stop-button');
+		const vizBox = document.getElementById('viz');
+		const infoPanel = document.getElementById('info-panel');
+		const infoNombre = document.getElementById('info-nombre');
+		const infoSabor = document.getElementById('info-sabor');
+		const infoNotas = document.getElementById('info-notas');
+		const infoTexto = document.getElementById('info-texto');
+		const infoDatos = document.getElementById('info-datos');
+		const progressContainer = document.getElementById('progress-container');
+		const progressFill = document.getElementById('progress-bar-fill');
+		const progressLabel = document.getElementById('progress-label');
+
+		const debugMode = new URLSearchParams(location.search).get('debug') === '1';
+		if (debugMode) document.body.classList.add('debug');
+
+		let player = null;
+		let mindarController = null;
+		let loaded = false;
+		let loadPromise = null;
+
+		function setProgress(percent, text) {
+			progressFill.style.width = `${percent}%`;
+			progressLabel.textContent = `${text} ${percent}%`;
+		}
+
+		/* ----------------------------------------------------------
+		   CONTROL DE AUDIO · window.PRISMA_AUDIO
+		   Se crea de una vez, antes de que cargue la escena, para que los
+		   scripts de app.json lo encuentren cuando toquen un objeto 3D.
+		   Resuelve cada pista contra player.assets.audios (donde app.json
+		   la precargó) y, si no está, la carga él mismo.
+		   ---------------------------------------------------------- */
+		function aviso(msg) {
+			if (debugMode) log.textContent = msg;
+			console.log('[PRISMA]', msg);
+		}
+
+		window.PRISMA_AUDIO = {
+
+			actual: null,
+			oyentes: [],
+			fallidas: new Set(),
+
+			alCambiar(fn) {
+				this.oyentes.push(fn);
+				fn(this.actual, this.disponibles());
+			},
+
+			avisar() {
+				for (const fn of this.oyentes) fn(this.actual, this.disponibles());
+			},
+
+			disponibles() {
+				return PISTAS.map(p => p.id).filter(id => !this.fallidas.has(id));
+			},
+
+			// Busca la pista en los assets del player; si no existe, la carga
+			asset(id) {
+				const p = window.player;
+				if (!p) { aviso('la escena todavía no ha cargado'); return null; }
+
+				let a = p.assets?.audios?.find(x => x.name === id);
+
+				if (!a && typeof p.loadAudio === 'function') {
+					const cfg = PISTAS.find(x => x.id === id);
+					if (!cfg?.url) return null;
+					a = p.loadAudio(cfg.id, cfg.url, (audio) => {
+						audio.setLoop(cfg.loop);
+						audio.setVolume(1);
+					});
+					aviso(`pista ${id} cargada desde el index`);
+				}
+
+				if (a && !a._prismaListo) {
+					a._prismaListo = true;
+					a.audio.addEventListener('ended', () => this.terminada(id));
+					a.audio.addEventListener('error', () => {
+						this.fallidas.add(id);
+						aviso(`no se pudo cargar el audio de ${id}`);
+						this.avisar();
+					});
+				}
+
+				return a || null;
+			},
+
+			async reproducir(id) {
+				this.detener();
+
+				const a = this.asset(id);
+				if (!a) { aviso(`sin audio para ${id}`); return; }
+
+				try { a.audio.currentTime = 0; } catch (e) { /* aún sin metadatos */ }
+
+				try {
+					await a.audio.play();
+				} catch (e) {
+					aviso(`el navegador bloqueó la reproducción de ${id}`);
+					return;
+				}
+
+				this.actual = id;
+				this.avisar();
+			},
+
+			// Tocar la pista que ya suena la apaga
+			alternar(id) {
+				if (this.actual === id) this.detener();
+				else this.reproducir(id);
+			},
+
+			detener() {
+				for (const p of PISTAS) {
+					const a = window.player?.assets?.audios?.find(x => x.name === p.id);
+					if (a) { a.audio.pause(); try { a.audio.currentTime = 0; } catch (e) { } }
+				}
+				this.actual = null;
+				this.avisar();
+			},
+
+			// La llama el evento 'ended' cuando una pista sin loop se acaba sola
+			terminada(id) {
+				if (this.actual !== id) return;
+				this.actual = null;
+				this.avisar();
+			}
+		};
+
+		/* ----------------------------------------------------------
+		   BOTONES
+		   ---------------------------------------------------------- */
+		const botones = new Map();
+
+		for (const p of PISTAS) {
+			const b = document.createElement('button');
+			b.className = 'track';
+			b.dataset.id = p.id;
+			b.style.setProperty('--c', p.color);
+			b.innerHTML = `<span class="dot"></span>
+				<span class="nombre">${p.nombre}</span>
+				<span class="nota">${p.nota}</span>`;
+			b.addEventListener('click', () => seleccionar(p.id));
+			tracksBox.appendChild(b);
+			botones.set(p.id, b);
+		}
+
+		stopButton.addEventListener('click', () => cerrar());
+
+		/* ----------------------------------------------------------
+		   VISUALIZADOR
+		   ---------------------------------------------------------- */
+		const BARRAS = 28;
+		const barras = [];
+		for (let i = 0; i < BARRAS; i++) {
+			const el = document.createElement('i');
+			vizBox.appendChild(el);
+			barras.push(el);
+		}
+
+		/* ----------------------------------------------------------
+		   ESTADO
+		   `seleccionado` es el sabor elegido: manda sobre el botón, la lata
+		   y la ficha, y se queda puesto. `pistaActiva` es solo lo que suena
+		   en este instante, que con sonidos cortos dura un segundo.
+		   ---------------------------------------------------------- */
+		let pistaActiva = null;
+		let seleccionado = null;
+		let rebote = 0;         // 0 a 1, decae solo
+
+		const seleccion = () => PISTAS.find(p => p.id === seleccionado) || null;
+
+		function pintarSeleccion() {
+			const s = seleccion();
+
+			for (const [id, b] of botones) b.classList.toggle('activa', id === seleccionado);
+			for (const el of barras) el.style.background = s ? s.color : 'var(--borde)';
+
+			if (s) {
+				infoPanel.style.setProperty('--c', s.color);
+				infoNombre.textContent = s.nombre;
+				infoSabor.textContent = s.nota;
+				infoNotas.innerHTML = s.notas.map(n => `<span>${n}</span>`).join('');
+				infoTexto.textContent = s.texto;
+				infoDatos.textContent = s.datos;
+				infoPanel.classList.add('abierto');
+				window.PRISMA_LATA?.mostrar(s.id);
+			} else {
+				infoPanel.classList.remove('abierto');
+			}
+
+			stopButton.textContent = s ? 'Cerrar' : 'Toca un color para conocer el sabor';
+		}
+
+		// Elegir un sabor: abre su ficha, cambia la lata y suena su pista
+		function seleccionar(id) {
+			if (seleccionado === id) { cerrar(); return; }
+			seleccionado = id;
+			rebote = 1;
+			pintarSeleccion();
+			window.PRISMA_AUDIO.reproducir(id);
+		}
+
+		function cerrar() {
+			seleccionado = null;
+			pintarSeleccion();
+			window.PRISMA_AUDIO.detener();
+		}
+
+		// Lo usa el script de la lata en app.json al tocarla
+		window.PRISMA_UI = { seleccionar, cerrar };
+
+		// Del control de audio solo nos interesa qué suena y qué pistas cargaron
+		function pintarEstado(idActual, disponibles) {
+			pistaActiva = PISTAS.find(p => p.id === idActual) || null;
+			if (disponibles) {
+				for (const [id, b] of botones) b.disabled = !disponibles.includes(id);
+			}
+		}
+
+		window.PRISMA_AUDIO.alCambiar(pintarEstado);
+		pintarSeleccion();
+
+		/* ----------------------------------------------------------
+		   ANIMACIÓN
+		   La lata gira siempre y da un golpe de escala al cambiar de sabor.
+		   Las barras laten mientras suena una pista: el nivel es sintético,
+		   porque los mp3 vienen de otro dominio y no se pueden analizar.
+		   ---------------------------------------------------------- */
+		const semillas = Array.from({ length: BARRAS }, () => Math.random() * 6.28);
+		let nivel = 0;
+		let giro = 0;
+
+		function bucle(t) {
+			requestAnimationFrame(bucle);
+
+			const ms = t || 0;
+			const objetivo = pistaActiva ? 1 : 0;
+			nivel += (objetivo - nivel) * 0.08;
+			rebote *= 0.9;
+
+			// visualizador
+			for (let i = 0; i < BARRAS; i++) {
+				const onda = (Math.sin(ms / 190 + semillas[i]) + Math.sin(ms / 97 + semillas[i] * 2.3)) / 2;
+				const centro = 1 - Math.abs(i / (BARRAS - 1) - 0.5) * 1.3; // más alto al centro
+				const v = Math.max(0, onda) * centro * nivel;
+				barras[i].style.height = `${2 + v * 24}px`;
+			}
+
+			// lata: giro continuo + rebote al cambiar de sabor
+			const lata = window.PRISMA_LATA?.obj;
+			if (lata) {
+				giro += GIRO;
+				lata.rotation.set(0, giro, 0);
+				const s = 1 + rebote * REBOTE;
+				lata.scale.set(s, s, s);
+			}
+		}
+		requestAnimationFrame(bucle);
+
+		/* ----------------------------------------------------------
+		   SEGUIMIENTO · app.json lanza prisma:targetFound / targetLost
+		   desde el script ImageTarget
+		   ---------------------------------------------------------- */
+		function setTracking(activo) {
+			arUI.classList.toggle('tracking', activo);
+			if (debugMode) log.textContent = activo ? 'target encontrado' : 'buscando target…';
+		}
+
+		window.addEventListener('prisma:targetFound', () => setTracking(true));
+		window.addEventListener('prisma:targetLost', () => setTracking(false));
+
+		/* ----------------------------------------------------------
+		   CARGA
+		   ---------------------------------------------------------- */
+		async function loadEverything() {
+
+			if (loadPromise) return loadPromise;
+
+			loadPromise = (async () => {
+
+				setProgress(0, 'Cargando escena…');
+
+				// Descarga app.json con progreso real (0% - 25%)
+				const text = await new Promise((resolve, reject) => {
+					const loader = new THREE.FileLoader();
+					loader.load(
+						'app.json',
+						(t) => resolve(t),
+						(e) => {
+							if (e.lengthComputable) {
+								const p = Math.round((e.loaded / e.total) * 25);
+								setProgress(p, 'Cargando escena…');
+							}
+						},
+						(err) => reject(new Error(err.statusText || 'No se pudo descargar el json'))
+					);
+				});
+
+				player = new APP.Player({ alpha: true });
+				await player.load(JSON.parse(text));
+				player.setSize(window.innerWidth, window.innerHeight);
+				player.play();
+				setProgress(55, 'Escena lista…');
+
+				document.body.appendChild(player.dom);
+
+				window.addEventListener('resize', function () {
+					player.setSize(window.innerWidth, window.innerHeight);
+				});
+
+				window.player = player;
+
+				// Los scripts de la escena ya precargaron las tres pistas
+				const cargadas = (player.assets?.audios || []).map(a => a.name);
+				aviso(`pistas en la escena: ${cargadas.join(', ') || 'ninguna'}`);
+				window.PRISMA_AUDIO.avisar();
+
+				setProgress(85, 'Preparando AR…');
+				if (debugMode) log.textContent = 'initializing…';
+
+				await new Promise((resolve) => setTimeout(resolve, 10));
+
+				setProgress(100, 'Listo');
+				loaded = true;
+
+			})().catch((e) => {
+				loaded = false;
+				loadPromise = null; // permite reintentar al pulsar el botón
+				throw e;
+			});
+
+			return loadPromise;
+		}
+
+		// Al darle al botón start se inicia la cámara (requiere gesto del usuario).
+		startButton.addEventListener('click', async () => {
+
+			progressContainer.style.display = 'flex';
+			startButton.disabled = true;
+
+			try {
+				await loadEverything();
+				if (!loaded) { startButton.disabled = false; return; }
+
+				setProgress(90, 'Iniciando cámara…');
+
+				mindarController = new MindARController(arContainer, player, debugMode);
+				window.mindarController = mindarController;
+
+				await mindarController.start();
+
+				// El player sigue funcionando (scripts/audio) pero su canvas ya no se usa.
+				if (player?.dom) player.dom.style.display = 'none';
+
+				overlay.classList.add('hidden');
+				arUI.classList.add('visible');
+				setTimeout(() => overlay.remove(), 450);
+
+			} catch (e) {
+				console.error('Error durante la carga:', e);
+				startButton.disabled = false;
+				startButton.textContent = 'Reintentar';
+				setProgress(0, 'Error al iniciar');
+			}
+
+		});
+
+		// Todo se carga automáticamente al abrir la página.
+		loadEverything().catch((e) => {
+			console.error('Error durante la carga automática:', e.message);
+			progressContainer.style.display = 'flex';
+			setProgress(0, 'Error al cargar');
+			startButton.textContent = 'Reintentar';
+		});
+
+	</script>
+</body>
+
+</html>
